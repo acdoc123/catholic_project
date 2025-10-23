@@ -6,6 +6,7 @@ from app.models.database_model import DatabaseModel
 from app.views.main_window import MainWindow
 from app.controllers.main_controller import MainController
 from utils.resource_manager import resource_path
+# from assets.styles.styles import STYLESHEET
 
 def main():
     """
@@ -17,7 +18,16 @@ def main():
         os.makedirs(data_dir)
 
     app = QApplication(sys.argv)
+    try:
+        # Sử dụng resource_path để đảm bảo đường dẫn đúng cả khi đã đóng gói
+        qss_file_path = resource_path('src/assets/styles/style.qss')
+        with open(qss_file_path, "r", encoding="utf-8") as f:
+            style = f.read()
+            app.setStyleSheet(style)
+    except FileNotFoundError:
+        print("Cảnh báo: Không tìm thấy tệp style.qss. Ứng dụng sẽ dùng giao diện mặc định.")
 
+    # app.setStyleSheet(STYLESHEET)
     # Khởi tạo các thành phần theo kiến trúc MVC
     # 1. Model: Quản lý dữ liệu
     db_path = resource_path('data/lyrics.db')

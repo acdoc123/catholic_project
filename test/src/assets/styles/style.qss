@@ -1,0 +1,44 @@
+/* file: assets/styles/style.qss */
+
+/* --- Giao diện chung cho các nút bấm --- */
+/* QPushButton {
+    background-color: #5a5a5a; 
+    color: white;             
+    border: 1px solid #666666;
+    padding: 5px 10px;
+    border-radius: 4px;
+    font-size: 13px;
+}
+
+QPushButton:hover {
+    background-color: #6b6b6b; 
+}
+
+QPushButton:pressed {
+    background-color: #4e4e4e; 
+} */
+
+QPushButton:disabled {
+    /* 
+     * Thay vì hiệu ứng mờ mặc định, chúng ta chỉ định rõ màu sắc.
+     * Nút sẽ có màu nền tối hơn một chút và màu chữ xám hơn,
+     * nhưng không bị "chìm" đi.
+    */
+    background-color: #404040; /* Nền tối hơn */
+    color: #888888;             /* Chữ xám hơn */
+}
+
+/* --- Tùy chỉnh cho các thành phần khác (tùy chọn) --- */
+/* QTreeView, QListWidget {
+    background-color: #2d2d2d;
+    color: #cccccc;
+    border: 1px solid #444444;
+}
+
+QLineEdit, QComboBox, QSpinBox {
+    background-color: #3c3c3c;
+    color: #f0f0f0;
+    border: 1px solid #555555;
+    padding: 4px;
+    border-radius: 3px;
+} */
