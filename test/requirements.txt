@@ -1,0 +1,7 @@
+PySide6
+python-pptx
+google-generativeai
+PyMuPDF
+Pillow
+python-dotenv
+qtawesome
