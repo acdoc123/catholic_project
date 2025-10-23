@@ -192,6 +192,7 @@ class MainController:
                 QMessageBox.information(self.view, "Hoàn tất", f"Đã xuất thành công file:\n{filePath}")
             except Exception as e:
                 QMessageBox.critical(self.view, "Lỗi xuất file", f"Đã có lỗi xảy ra:\n{e}")
+                print(f"Lỗi khi xuất PPTX: {e}")
 
     def _handle_font_size_changed(self, font_type: str, value: int):
         if self.current_selected_playlist_song_id is None: return

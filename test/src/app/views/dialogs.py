@@ -7,6 +7,7 @@ from PySide6.QtCore import Signal
 from app.models.song_model import Song, Songbook, Theme
 from typing import Optional
 from app.models.database_model import DatabaseModel
+import copy
 
 class AddSongDialog(QDialog):
     """Dialog để thêm hoặc sửa một bài hát."""
@@ -106,13 +107,20 @@ class AddSongDialog(QDialog):
 # (Code cho ThemeDialog sẽ tương tự, với các widget để chỉnh sửa màu sắc, font chữ, v.v.)
 
 class ThemeDialog(QDialog):
-    """Dialog để chỉnh sửa Theme trình chiếu."""
+    """Dialog để chỉnh sửa Theme trình chiếu mặc định."""
     def __init__(self, current_theme: Theme, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Thiết lập Theme Mặc định")
-        self.setMinimumWidth(400)
-        self.theme = current_theme
+        self.setMinimumWidth(450)
 
+        # Quan trọng: Làm việc trên một bản sao để có thể hủy bỏ thay đổi
+        self.theme = copy.deepcopy(current_theme)
+
+        # Lưu trữ các đối tượng QFont để mở FontDialog
+        self.title_font = QFont(self.theme.title_font_name)
+        self.lyric_font = QFont(self.theme.lyric_font_name)
+
+        # --- Bố cục chính ---
         self.layout = QVBoxLayout(self)
 
         # --- Cài đặt chung ---
@@ -121,6 +129,7 @@ class ThemeDialog(QDialog):
         self.slide_size_combo = QComboBox()
         self.slide_size_combo.addItems(["16:9", "4:3"])
         self.bg_color_button = QPushButton()
+        self.bg_color_button.setFixedSize(100, 25)
         self.bg_color_button.clicked.connect(self._pick_bg_color)
         general_layout.addRow("Kích thước Slide:", self.slide_size_combo)
         general_layout.addRow("Màu nền:", self.bg_color_button)
@@ -130,45 +139,53 @@ class ThemeDialog(QDialog):
         # --- Cài đặt Tựa đề ---
         title_group = QGroupBox("Định dạng Tựa đề")
         title_layout = QFormLayout()
+        font_layout_title = QHBoxLayout()
         self.title_font_label = QLabel()
         self.title_font_button = QPushButton("Chọn Font")
         self.title_font_button.clicked.connect(self._pick_title_font)
+        font_layout_title.addWidget(self.title_font_label)
+        font_layout_title.addWidget(self.title_font_button)
         self.title_color_button = QPushButton()
+        self.title_color_button.setFixedSize(100, 25)
         self.title_color_button.clicked.connect(self._pick_title_color)
-        style_layout = QHBoxLayout()
+        style_layout_title = QHBoxLayout()
         self.title_bold_check = QCheckBox("In đậm")
         self.title_italic_check = QCheckBox("In nghiêng")
         self.title_underline_check = QCheckBox("Gạch chân")
-        style_layout.addWidget(self.title_bold_check)
-        style_layout.addWidget(self.title_italic_check)
-        style_layout.addWidget(self.title_underline_check)
-        title_layout.addRow(self.title_font_label, self.title_font_button)
+        style_layout_title.addWidget(self.title_bold_check)
+        style_layout_title.addWidget(self.title_italic_check)
+        style_layout_title.addWidget(self.title_underline_check)
+        title_layout.addRow("Font:", font_layout_title)
         title_layout.addRow("Màu chữ:", self.title_color_button)
-        title_layout.addRow("Kiểu:", style_layout)
+        title_layout.addRow("Kiểu:", style_layout_title)
         title_group.setLayout(title_layout)
         self.layout.addWidget(title_group)
 
         # --- Cài đặt Lời bài hát ---
         lyric_group = QGroupBox("Định dạng Lời bài hát")
         lyric_layout = QFormLayout()
+        font_layout_lyric = QHBoxLayout()
         self.lyric_font_label = QLabel()
         self.lyric_font_button = QPushButton("Chọn Font")
         self.lyric_font_button.clicked.connect(self._pick_lyric_font)
+        font_layout_lyric.addWidget(self.lyric_font_label)
+        font_layout_lyric.addWidget(self.lyric_font_button)
         self.lyric_color_button = QPushButton()
+        self.lyric_color_button.setFixedSize(100, 25)
         self.lyric_color_button.clicked.connect(self._pick_lyric_color)
         self.lyric_align_combo = QComboBox()
-        self.lyric_align_combo.addItems()
-        lyric_style_layout = QHBoxLayout()
+        self.lyric_align_combo.addItems(["CENTER", "LEFT", "RIGHT"])
+        style_layout_lyric = QHBoxLayout()
         self.lyric_bold_check = QCheckBox("In đậm")
         self.lyric_italic_check = QCheckBox("In nghiêng")
         self.lyric_underline_check = QCheckBox("Gạch chân")
-        lyric_style_layout.addWidget(self.lyric_bold_check)
-        lyric_style_layout.addWidget(self.lyric_italic_check)
-        lyric_style_layout.addWidget(self.lyric_underline_check)
-        lyric_layout.addRow(self.lyric_font_label, self.lyric_font_button)
+        style_layout_lyric.addWidget(self.lyric_bold_check)
+        style_layout_lyric.addWidget(self.lyric_italic_check)
+        style_layout_lyric.addWidget(self.lyric_underline_check)
+        lyric_layout.addRow("Font:", font_layout_lyric)
         lyric_layout.addRow("Màu chữ:", self.lyric_color_button)
         lyric_layout.addRow("Căn lề:", self.lyric_align_combo)
-        lyric_layout.addRow("Kiểu:", lyric_style_layout)
+        lyric_layout.addRow("Kiểu:", style_layout_lyric)
         lyric_group.setLayout(lyric_layout)
         self.layout.addWidget(lyric_group)
 
@@ -190,7 +207,6 @@ class ThemeDialog(QDialog):
         self._update_color_button(self.bg_color_button, self.theme.bg_color)
         
         # Title
-        self.title_font = QFont(self.theme.title_font_name)
         self.title_font_label.setText(f"{self.theme.title_font_name}")
         self._update_color_button(self.title_color_button, self.theme.title_font_color)
         self.title_bold_check.setChecked(self.theme.title_font_bold)
@@ -198,7 +214,6 @@ class ThemeDialog(QDialog):
         self.title_underline_check.setChecked(self.theme.title_font_underline)
 
         # Lyric
-        self.lyric_font = QFont(self.theme.lyric_font_name)
         self.lyric_font_label.setText(f"{self.theme.lyric_font_name}")
         self._update_color_button(self.lyric_color_button, self.theme.lyric_font_color)
         self.lyric_align_combo.setCurrentText(self.theme.lyric_alignment)
@@ -206,24 +221,31 @@ class ThemeDialog(QDialog):
         self.lyric_italic_check.setChecked(self.theme.lyric_font_italic)
         self.lyric_underline_check.setChecked(self.theme.lyric_font_underline)
 
-    def _update_color_button(self, button, color_hex):
-        button.setStyleSheet(f"background-color: {color_hex};")
+        print("ThemeDialog: Dữ liệu đã được điền vào các widget.")
 
-    def _pick_color(self, button, initial_color):
-        color = QColorDialog.getColor(QColor(initial_color), self, "Chọn màu")
-        if color.isValid():
-            self._update_color_button(button, color.name())
-            return color.name()
-        return initial_color
+    def _update_color_button(self, button, color_hex):
+        """Cập nhật màu nền cho nút chọn màu."""
+        button.setStyleSheet(f"background-color: {color_hex}; border: 1px solid #555;")
+
+    def _pick_color(self, initial_color_hex):
+        """Mở QColorDialog và trả về màu đã chọn."""
+        color = QColorDialog.getColor(QColor(initial_color_hex), self, "Chọn màu")
+        return color.name() if color.isValid() else initial_color_hex
 
     def _pick_bg_color(self):
-        self.theme.bg_color = self._pick_color(self.bg_color_button, self.theme.bg_color)
+        new_color = self._pick_color(self.theme.bg_color)
+        self.theme.bg_color = new_color
+        self._update_color_button(self.bg_color_button, new_color)
 
     def _pick_title_color(self):
-        self.theme.title_font_color = self._pick_color(self.title_color_button, self.theme.title_font_color)
+        new_color = self._pick_color(self.theme.title_font_color)
+        self.theme.title_font_color = new_color
+        self._update_color_button(self.title_color_button, new_color)
 
     def _pick_lyric_color(self):
-        self.theme.lyric_font_color = self._pick_color(self.lyric_color_button, self.theme.lyric_font_color)
+        new_color = self._pick_color(self.theme.lyric_font_color)
+        self.theme.lyric_font_color = new_color
+        self._update_color_button(self.lyric_color_button, new_color)
 
     def _pick_title_font(self):
         ok, font = QFontDialog.getFont(self.title_font, self, "Chọn font cho Tựa đề")
@@ -238,7 +260,11 @@ class ThemeDialog(QDialog):
             self.lyric_font_label.setText(font.family())
 
     def get_theme_data(self) -> Theme:
-        """Lấy dữ liệu từ dialog và trả về một đối tượng Theme mới."""
+        """
+        Lấy dữ liệu từ các widget và cập nhật vào đối tượng theme.
+        Hàm này được Controller gọi sau khi dialog được accept.
+        """
+        # General
         if self.slide_size_combo.currentIndex() == 1: # 4:3
             self.theme.slide_width = 9144000
             self.theme.slide_height = 6858000
@@ -246,11 +272,13 @@ class ThemeDialog(QDialog):
             self.theme.slide_width = 12192000
             self.theme.slide_height = 6858000
         
+        # Title
         self.theme.title_font_name = self.title_font.family()
         self.theme.title_font_bold = self.title_bold_check.isChecked()
         self.theme.title_font_italic = self.title_italic_check.isChecked()
         self.theme.title_font_underline = self.title_underline_check.isChecked()
 
+        # Lyric
         self.theme.lyric_font_name = self.lyric_font.family()
         self.theme.lyric_alignment = self.lyric_align_combo.currentText()
         self.theme.lyric_font_bold = self.lyric_bold_check.isChecked()

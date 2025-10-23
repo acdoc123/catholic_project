@@ -32,8 +32,8 @@ class PlaylistView(QWidget):
         self.layout.addWidget(self.export_button)
 
         # Kết nối tín hiệu
-        self.theme_button.clicked.connect(self.theme_button_clicked)
         self.export_button.clicked.connect(self.export_button_clicked)
+        self.theme_button.clicked.connect(self.theme_button_clicked)
         self.list_widget.currentRowChanged.connect(self._on_song_selected)
         self.list_widget.model().rowsMoved.connect(self.playlist_reordered)
 
