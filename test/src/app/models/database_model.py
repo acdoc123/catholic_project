@@ -125,45 +125,62 @@ class DatabaseModel:
         
         return list(songbooks_dict.values())
     
-    def search_songs(self, keyword: str = "", songbook_id: int = 0, search_by: str = "", number: Optional[int] = None) -> List:
+    def search_songs(self, keyword: str = "", songbook_id: int = 0, search_by: str = "title") -> List:
         """
-        Tìm kiếm và lọc bài hát dựa trên nhiều tiêu chí.
-        - keyword: Từ khóa tìm trong tựa đề hoặc lời bài hát.
+        Tìm kiếm và lọc bài hát dựa trên các tiêu chí mới.
+        - keyword: Từ khóa tìm kiếm.
         - songbook_id: Lọc theo ID của sách (0 = tất cả).
-        - search_by: 'page' hoặc 'number'.
-        - number: Số trang hoặc số bài cần tìm.
+        - search_by: Cột để tìm kiếm ('title', 'lyrics', 'number', 'page').
         """
         songbooks_dict = {}
         cursor = self.conn.cursor()
 
-        # Lấy tất cả các sách trước
+        # Luôn lấy tất cả các sách để có thể điền kết quả vào
         cursor.execute("SELECT id, name FROM songbooks ORDER BY name")
         for row in cursor.fetchall():
             songbooks_dict[row['id']] = Songbook(id=row['id'], name=row['name'])
 
-        # Xây dựng câu truy vấn SQL động
+        # Nếu không có từ khóa, trả về tất cả bài hát (có thể lọc theo sách)
+        if not keyword:
+            query = "SELECT * FROM songs WHERE 1=1"
+            params = []
+            if songbook_id > 0:
+                query += " AND songbook_id =?"
+                params.append(songbook_id)
+            
+            query += " ORDER BY title"
+            cursor.execute(query, tuple(params))
+            for row in cursor.fetchall():
+                song = Song(**dict(row))
+                if song.songbook_id in songbooks_dict:
+                    songbooks_dict[song.songbook_id].songs.append(song)
+            return [sb for sb in songbooks_dict.values() if sb.songs]
+
+        # Xây dựng câu truy vấn động nếu có từ khóa
         query = "SELECT * FROM songs WHERE 1=1"
         params = []
 
-        if keyword:
-            query += " AND (title LIKE? OR lyrics LIKE?)"
-            params.extend([f"%{keyword}%", f"%{keyword}%"])
-
+        # Xử lý trường tìm kiếm
+        if search_by in ('title', 'lyrics'):
+            query += f" AND {search_by} LIKE?"
+            params.append(f"%{keyword}%")
+        elif search_by in ('number', 'page'):
+            # Cố gắng chuyển từ khóa thành số, nếu thất bại sẽ không có kết quả
+            try:
+                number_val = int(keyword)
+                query += f" AND {search_by} =?"
+                params.append(number_val)
+            except ValueError:
+                return # Trả về danh sách rỗng nếu nhập chữ vào ô tìm số
+        
+        # Xử lý bộ lọc sách
         if songbook_id > 0:
             query += " AND songbook_id =?"
             params.append(songbook_id)
-
-        if search_by and number is not None:
-            if search_by == 'page':
-                query += " AND page =?"
-                params.append(number)
-            elif search_by == 'number':
-                query += " AND number =?"
-                params.append(number)
         
         query += " ORDER BY title"
         
-        # Thực thi truy vấn và điền kết quả vào các sách tương ứng
+        # Thực thi truy vấn và điền kết quả
         cursor.execute(query, tuple(params))
         for row in cursor.fetchall():
             song = Song(**dict(row))

@@ -32,7 +32,6 @@ class MainController:
         self._connect_signals()
 
         # Tải dữ liệu ban đầu và hiển thị lên giao diện
-        self._load_and_display_songbooks()
         self._initial_load()
         self._update_preview()
 
@@ -76,6 +75,7 @@ class MainController:
         """Tải lại toàn bộ dữ liệu sau khi có thay đổi (thêm/sửa/xóa)."""
         self.all_songbooks_cache = self.model.get_songbooks_with_songs()
         self.view.songbook_view.search_widget.populate_songbooks(self.all_songbooks_cache)
+        print("Reloaded all data...")
         # Sau khi tải lại, áp dụng lại bộ lọc hiện tại
         self._handle_filters_changed()
     def _handle_filters_changed(self):
@@ -90,11 +90,6 @@ class MainController:
         
         # Cập nhật lại trạng thái nút "Thêm" sau khi hiển thị kết quả
         self._update_songbook_view_buttons()
-    def _load_and_display_songbooks(self):
-        """Tải dữ liệu từ model và yêu cầu SongbookView hiển thị nó."""
-        songbooks = self.model.get_songbooks_with_songs()
-        self.view.songbook_view.populate_tree(songbooks) # Gọi hàm mới
-        print("Đã tải lại danh sách Sách bài hát.")
     def _handle_open_theme_dialog(self):
         """Mở dialog để chỉnh sửa theme."""
         dialog = ThemeDialog(self.current_theme, self.view)

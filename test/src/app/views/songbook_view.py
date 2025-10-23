@@ -63,7 +63,6 @@ class SongbookView(QWidget):
     def populate_tree(self, songbooks):
         """Điền dữ liệu (có thể là kết quả tìm kiếm) vào cây."""
         self.model.clear()
-        self.add_buttons.clear()
         root_node = self.model.invisibleRootItem()
 
         for sb in songbooks:
