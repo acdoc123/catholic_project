@@ -1,8 +1,10 @@
-from typing import Optional
-from PySide6.QtWidgets import (QWidget, QVBoxLayout, QLabel, QSpinBox, 
+# src/app/views/preview_view.py
+
+from PySide6.QtWidgets import (QWidget, QVBoxLayout, QSpinBox, 
                                QFormLayout, QGroupBox)
-from PySide6.QtGui import QPainter, QColor, QFont, QPen
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QPainter, QColor, QFont
+from PySide6.QtCore import Qt, Signal, QRect
+from typing import Optional
 from app.models.song_model import Theme, Song
 
 class PreviewWidget(QWidget):
@@ -25,6 +27,7 @@ class PreviewWidget(QWidget):
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
+        painter.setRenderHint(QPainter.TextAntialiasing)
 
         # Vẽ nền slide
         bg_color = QColor(self.theme.bg_color)
@@ -77,7 +80,7 @@ class PreviewWidget(QWidget):
 
 class PreviewView(QWidget):
     """Cột bên phải, hiển thị bản xem trước và các tùy chọn tinh chỉnh."""
-    font_size_changed = Signal(str, int) # Gửi đi 'title' hoặc 'lyric' và giá trị mới
+    font_size_changed = Signal(str, int)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -85,7 +88,6 @@ class PreviewView(QWidget):
         
         self.preview_widget = PreviewWidget()
         
-        # GroupBox cho các tùy chỉnh
         self.settings_box = QGroupBox("Tùy chỉnh Font chữ cho bài hát này")
         self.settings_layout = QFormLayout()
 
@@ -102,12 +104,10 @@ class PreviewView(QWidget):
         self.layout.addWidget(self.preview_widget)
         self.layout.addWidget(self.settings_box)
         
-        # Kết nối tín hiệu
         self.title_font_size_spinbox.valueChanged.connect(lambda val: self.font_size_changed.emit('title', val))
         self.lyric_font_size_spinbox.valueChanged.connect(lambda val: self.font_size_changed.emit('lyric', val))
 
     def update_preview(self, theme: Theme, song: Optional, title_size: int, lyric_size: int):
-        # Tạm thời ngắt kết nối tín hiệu để tránh vòng lặp vô hạn
         self.title_font_size_spinbox.blockSignals(True)
         self.lyric_font_size_spinbox.blockSignals(True)
         

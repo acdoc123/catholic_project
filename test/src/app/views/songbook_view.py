@@ -16,21 +16,20 @@ class SongbookView(QWidget):
     Cột bên trái, hiển thị cây thư mục Sách bài hát và các bài hát.
     Sử dụng phương pháp setItemWidget đơn giản và trực tiếp.
     """
-    # Tín hiệu bây giờ sẽ gửi đi ID trực tiếp, đơn giản hơn
     add_song_clicked = Signal()
     add_songbook_clicked = Signal()
-    
-    rename_songbook_clicked = Signal(int) # Gửi đi songbook_id
-    delete_songbook_clicked = Signal(int) # Gửi đi songbook_id
-    
-    add_to_playlist_clicked = Signal(int) # Gửi đi song_id
-    edit_song_clicked = Signal(int)       # Gửi đi song_id
-    delete_song_clicked = Signal(int)       # Gửi đi song_id
+    rename_songbook_clicked = Signal(int)
+    delete_songbook_clicked = Signal(int)
+    add_to_playlist_clicked = Signal(int)
+    edit_song_clicked = Signal(int)
+    delete_song_clicked = Signal(int)
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.layout = QVBoxLayout(self)
         self.playlist_song_ids = set()
+
+        self.song_widgets = {}
 
         self.add_song_button = QPushButton(qta.icon(ICON_NEW_SONG), "Thêm bài hát mới")
         self.add_songbook_button = QPushButton(qta.icon(ICON_NEW_SONGBOOK, color="#592b2b"), "Thêm Sách bài hát")
@@ -40,29 +39,40 @@ class SongbookView(QWidget):
         self.tree_view = QTreeView()
         self.tree_view.setHeaderHidden(True)
         self.tree_view.setIndentation(10)
+        
         button_layout = QHBoxLayout()
-    
         button_layout.addWidget(self.add_song_button, stretch=2)
         button_layout.addWidget(self.add_songbook_button, stretch=1)
+        
         self.layout.addLayout(button_layout)
         self.layout.addWidget(self.search_widget)
         self.layout.addWidget(self.tree_view)
+        
         self.model = QStandardItemModel()
         self.tree_view.setModel(self.model)
 
         self.add_song_button.clicked.connect(self.add_song_clicked)
         self.add_songbook_button.clicked.connect(self.add_songbook_clicked)
 
-    def set_playlist_ids(self, ids: list[int]):
+    def set_playlist_ids(self, ids: set):
         """Cập nhật danh sách ID các bài hát đang có trong playlist."""
-        self.playlist_song_ids = set(ids)
-        # Cần tải lại cây để cập nhật trạng thái enable/disable của nút
-        # Đây là một sự đánh đổi của phương pháp đơn giản này
-        # (Một giải pháp tối ưu hơn sẽ là duyệt qua các widget và cập nhật chúng)
+        self.playlist_song_ids = ids
+
+    def update_button_states(self):
+        """
+        Cập nhật trạng thái của các nút một cách hiệu quả mà không cần vẽ lại toàn bộ cây.
+        """
+        for song_id, widgets in self.song_widgets.items():
+            is_in_playlist = song_id in self.playlist_song_ids
+            widgets['add_btn'].setEnabled(not is_in_playlist)
+            widgets['edit_btn'].setEnabled(not is_in_playlist)
+            widgets['delete_btn'].setEnabled(not is_in_playlist)
 
     def populate_tree(self, songbooks):
         """Điền dữ liệu (có thể là kết quả tìm kiếm) vào cây."""
         self.model.clear()
+    
+        self.song_widgets.clear() # Xóa các widget cũ trước khi tạo lại
         root_node = self.model.invisibleRootItem()
 
         for sb in songbooks:
@@ -84,41 +94,39 @@ class SongbookView(QWidget):
         self.tree_view.expandAll()
 
     def _create_songbook_widget(self, songbook):
-        """Tạo widget chứa tên sách và các nút chức năng."""
         widget = QWidget()
         layout = QHBoxLayout(widget)
         layout.setContentsMargins(0, 0, 0, 0)
-
         label = QLabel(f"{songbook.name}")
         label.setStyleSheet("font-weight: bold;")
-        
         rename_btn = QPushButton(qta.icon(ICON_RENAME), "")
         delete_btn = QPushButton(qta.icon(ICON_DELETE), "")
-        
-        # Sử dụng lambda để truyền ID vào tín hiệu
         rename_btn.clicked.connect(lambda checked=False, sb_id=songbook.id: self.rename_songbook_clicked.emit(sb_id))
         delete_btn.clicked.connect(lambda checked=False, sb_id=songbook.id: self.delete_songbook_clicked.emit(sb_id))
-
         layout.addWidget(label, stretch=7)
         layout.addWidget(rename_btn, stretch=2)
         layout.addWidget(delete_btn, stretch=1)
-        
         return widget
 
     def _create_song_widget(self, song):
         """Tạo widget chứa tên bài hát và các nút chức năng."""
         widget = QWidget()
         layout = QHBoxLayout(widget)
-        layout.setContentsMargins(0, 0, 0, 0) # Thụt lề cho bài hát
+        layout.setContentsMargins(0, 0, 0, 0)
 
         label = QLabel(song.title)
-        label.setToolTip(song.title) # Hiển thị tên đầy đủ khi hover
+        label.setToolTip(song.title)
 
         add_btn = QPushButton(qta.icon(ICON_ADD_SLIDE, color=COLOR_ADD_BUTTON), "")
         edit_btn = QPushButton(qta.icon(ICON_EDIT_SONG, color=COLOR_EDIT_BUTTON), "")
         delete_btn = QPushButton(qta.icon(ICON_DELETE, color=COLOR_DELETE_BUTTON), "")
 
-        #add_btn.
+        # Lưu lại các nút để có thể cập nhật trạng thái sau này
+        self.song_widgets[song.id] = {
+            'add_btn': add_btn,
+            'edit_btn': edit_btn,
+            'delete_btn': delete_btn
+        }
 
         # Vô hiệu hóa nút "Thêm" nếu bài hát đã có trong playlist
         if song.id in self.playlist_song_ids:
@@ -126,15 +134,19 @@ class SongbookView(QWidget):
             edit_btn.setEnabled(False)
             delete_btn.setEnabled(False)
 
-        # Sử dụng lambda để truyền ID vào tín hiệu
         add_btn.clicked.connect(lambda checked=False, s_id=song.id: self.add_to_playlist_clicked.emit(s_id))
         edit_btn.clicked.connect(lambda checked=False, s_id=song.id: self.edit_song_clicked.emit(s_id))
         delete_btn.clicked.connect(lambda checked=False, s_id=song.id: self.delete_song_clicked.emit(s_id))
 
         layout.addWidget(label, stretch=7)
-        #layout.addStretch()
         layout.addWidget(add_btn, stretch=1)
         layout.addWidget(edit_btn, stretch=1)
         layout.addWidget(delete_btn, stretch=1)
 
         return widget
+
+    def on_playlist_updated(self, songs: list):
+        """Slot này được kết nối với tín hiệu của PlaylistModel."""
+        playlist_ids = {song.id for song in songs}
+        self.set_playlist_ids(playlist_ids)
+        self.update_button_states()
