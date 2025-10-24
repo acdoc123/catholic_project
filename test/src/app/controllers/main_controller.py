@@ -206,13 +206,28 @@ class MainController:
         self._update_preview()
 
     def _update_preview(self):
+        """Cập nhật cột xem trước với bài hát và theme hiện tại."""
         song = None
         title_size = self.current_theme.title_font_size
         lyric_size = self.current_theme.lyric_font_size
+        
         if self.current_selected_playlist_song_id:
             song_id = self.current_selected_playlist_song_id
-            song = self.db_model.get_song_by_id(song_id)
+            # Lấy bài hát từ playlist model
+            playlist_songs = self.playlist_model.get_playlist()
+            for s in playlist_songs:
+                if s.id == song_id:
+                    song = s
+                    break
+            
             if song and song_id in self.font_overrides:
                 title_size = self.font_overrides[song_id].get('title', title_size)
                 lyric_size = self.font_overrides[song_id].get('lyric', lyric_size)
-        self.view.preview_view.update_preview(theme=self.current_theme, song=song, title_size=title_size, lyric_size=lyric_size)
+        
+        # Lệnh gọi này không thay đổi, nhưng hàm update_preview bên trong View đã mạnh mẽ hơn
+        self.view.preview_view.update_preview(
+            theme=self.current_theme, 
+            song=song, 
+            title_size=title_size, 
+            lyric_size=lyric_size
+        )

@@ -174,7 +174,7 @@ class ThemeDialog(QDialog):
         self.lyric_color_button.setFixedSize(100, 25)
         self.lyric_color_button.clicked.connect(self._pick_lyric_color)
         self.lyric_align_combo = QComboBox()
-        self.lyric_align_combo.addItems(["CENTER", "LEFT", "RIGHT"])
+        self.lyric_align_combo.addItems(["CENTER", "LEFT", "RIGHT", "JUSTIFY"])
         style_layout_lyric = QHBoxLayout()
         self.lyric_bold_check = QCheckBox("In đậm")
         self.lyric_italic_check = QCheckBox("In nghiêng")
