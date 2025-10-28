@@ -1,14 +1,16 @@
 # src/app/controllers/main_controller.py
 
 from PySide6.QtWidgets import QInputDialog, QMessageBox, QFileDialog
-from PySide6.QtCore import QModelIndex
+from PySide6.QtCore import QModelIndex, QRectF # <-- IMPORT THÊM
+from PySide6.QtGui import QFont # <-- IMPORT THÊM
 
 from app.models.database_model import DatabaseModel
 from app.models.playlist_model import PlaylistModel
-from app.models.song_model import Song
+from app.models.song_model import Song, Theme
 from app.views.main_window import MainWindow
 from app.views.dialogs import AddSongDialog, ThemeDialog
 from utils.pptx_generator import generate_presentation
+from utils.slide_layout_engine import split_lyrics_into_slides # <-- IMPORT THÊM
 
 class MainController:
     """
@@ -22,7 +24,17 @@ class MainController:
         self.all_songbooks_cache = []
         self.current_theme = self.db_model.get_theme()
         self.current_selected_playlist_song_id = None
-        self.font_overrides = {}
+        
+        # THAY ĐỔI: 'font_overrides' được đổi tên thành 'presentation_overrides'
+        # Cấu trúc mới:
+        # {
+        #   song_id: {
+        #     'title': 44, (Cỡ chữ)
+        #     'lyric': 32, (Cỡ chữ)
+        #     'slides': ["Slide 1 đã sửa", "Slide 2 đã sửa", ...]
+        #   }
+        # }
+        self.presentation_overrides = {}
 
         self._connect_signals()
         self._initial_load()
@@ -33,7 +45,6 @@ class MainController:
         pl_view = self.view.playlist_view
         pr_view = self.view.preview_view
         # --- Kết nối tín hiệu từ Model đến View ---
-        # Bất cứ khi nào playlist thay đổi, cả 2 view đều tự động cập nhật
         self.playlist_model.playlist_updated.connect(pl_view.on_playlist_updated)
         self.playlist_model.playlist_updated.connect(sb_view.on_playlist_updated)
 
@@ -50,10 +61,14 @@ class MainController:
         pl_view.export_button_clicked.connect(self._handle_export_pptx)
         pl_view.song_selected.connect(self._handle_playlist_song_selected)
         pl_view.theme_button_clicked.connect(self._handle_open_theme_dialog)
-        pl_view.song_removed.connect(self._handle_remove_from_playlist) # Tín hiệu mới
-        pl_view.playlist_reordered.connect(self._handle_playlist_reordered) # Tín hiệu mới
+        pl_view.song_removed.connect(self._handle_remove_from_playlist)
+        pl_view.playlist_reordered.connect(self._handle_playlist_reordered)
 
         pr_view.font_size_changed.connect(self._handle_font_size_changed)
+        
+        # KẾT NỐI TÍN HIỆU MỚI
+        pr_view.slide_content_edited.connect(self._handle_slide_content_edited)
+        # pr_view.title_content_edited.connect(self... ) # (Bạn có thể thêm sau)
 
     def _initial_load(self):
         self.all_songbooks_cache = self.db_model.get_songbooks_with_songs()
@@ -161,6 +176,13 @@ class MainController:
             self.playlist_model.add_song(song)
 
     # --- Các hàm xử lý cho Playlist và Preview ---
+    
+    def _get_or_create_override(self, song_id: int) -> dict:
+        """Hàm tiện ích lấy hoặc tạo mục override cho một bài hát"""
+        if song_id not in self.presentation_overrides:
+            self.presentation_overrides[song_id] = {}
+        return self.presentation_overrides[song_id]
+
     def _handle_playlist_song_selected(self, song_id: int):
         self.current_selected_playlist_song_id = song_id
         self._update_preview()
@@ -175,6 +197,9 @@ class MainController:
 
     def _handle_remove_from_playlist(self, song_id: int):
         self.playlist_model.remove_song_by_id(song_id)
+        # (Tùy chọn: Xóa override khi xóa khỏi playlist)
+        # if song_id in self.presentation_overrides:
+        #     del self.presentation_overrides[song_id]
 
     def _handle_playlist_reordered(self):
         new_ordered_ids = self.view.playlist_view.get_current_song_ids()
@@ -188,7 +213,13 @@ class MainController:
         filePath, _ = QFileDialog.getSaveFileName(self.view, "Lưu file PowerPoint", "", "PowerPoint Files (*.pptx)")
         if filePath:
             try:
-                generate_presentation(songs=songs_to_export, theme=self.current_theme, output_path=filePath, overrides=self.font_overrides)
+                # THAY ĐỔI: Truyền 'presentation_overrides'
+                generate_presentation(
+                    songs=songs_to_export, 
+                    theme=self.current_theme, 
+                    output_path=filePath, 
+                    overrides=self.presentation_overrides # << ĐÂY
+                )
                 QMessageBox.information(self.view, "Hoàn tất", f"Đã xuất thành công file:\n{filePath}")
             except Exception as e:
                 QMessageBox.critical(self.view, "Lỗi xuất file", f"Đã có lỗi xảy ra:\n{e}")
@@ -196,20 +227,71 @@ class MainController:
 
     def _handle_font_size_changed(self, font_type: str, value: int):
         if self.current_selected_playlist_song_id is None: return
+        
         song_id = self.current_selected_playlist_song_id
-        if song_id not in self.font_overrides:
-            self.font_overrides[song_id] = {}
+        override = self._get_or_create_override(song_id)
+        
         if font_type == 'title':
-            self.font_overrides[song_id]['title'] = value
+            override['title'] = value
         elif font_type == 'lyric':
-            self.font_overrides[song_id]['lyric'] = value
-        self._update_preview()
+            override['lyric'] = value
+            
+            # QUAN TRỌNG: Khi đổi cỡ chữ lời,
+            # chúng ta phải xóa slide đã lưu (nếu có) để chia lại.
+            if 'slides' in override:
+                del override['slides']
+                
+        self._update_preview() # Cập nhật lại preview
+
+    def _handle_slide_content_edited(self, song_id: int, slide_index: int, new_plain_text: str):
+        """LƯU LẠI NỘI DUNG SLIDE ĐÃ BỊ CHỈNH SỬA"""
+        if song_id != self.current_selected_playlist_song_id:
+            return
+            
+        override = self._get_or_create_override(song_id)
+        
+        if 'slides' not in override:
+            # Điều này không nên xảy ra vì _update_preview luôn tạo nó
+            return 
+            
+        # Cập nhật nội dung slide (dạng plain text)
+        if slide_index < len(override['slides']):
+            override['slides'][slide_index] = new_plain_text
+
+    def _get_slides_for_preview(self, song: Song, theme: Theme, lyric_size: int):
+        """
+        Quyết định xem nên dùng slide đã lưu hay chia lại từ đầu.
+        """
+        override = self._get_or_create_override(song.id)
+        
+        # ƯU TIÊN 1: Dùng slide đã được chỉnh sửa (lưu trong override)
+        if 'slides' in override:
+            return override['slides']
+
+        # ƯU TIÊN 2: Nếu không có, chia lại slide bằng layout engine
+        lyric_font = QFont(theme.lyric_font_name, lyric_size)
+        is_widescreen = theme.slide_width > 10000000
+        slide_w_px, slide_h_px = (960, 540) if is_widescreen else (720, 540)
+        
+        # Đơn giản hóa: dùng 1 box chung
+        box_w = slide_w_px * 0.9 # 90% chiều rộng
+        box_h = slide_h_px * 0.8 # 80% chiều cao (chừa chỗ cho tựa đề)
+        bounding_box = QRectF(0, 0, box_w, box_h)
+        
+        lyrics_slides = split_lyrics_into_slides(song.lyrics, lyric_font, bounding_box)
+        
+        # LƯU KẾT QUẢ MỚI CHIA NÀY VÀO OVERRIDE
+        # để người dùng có thể bắt đầu chỉnh sửa
+        override['slides'] = lyrics_slides
+        
+        return lyrics_slides
 
     def _update_preview(self):
         """Cập nhật cột xem trước với bài hát và theme hiện tại."""
         song = None
         title_size = self.current_theme.title_font_size
         lyric_size = self.current_theme.lyric_font_size
+        lyric_slides = [] # << MỚI
         
         if self.current_selected_playlist_song_id:
             song_id = self.current_selected_playlist_song_id
@@ -220,14 +302,20 @@ class MainController:
                     song = s
                     break
             
-            if song and song_id in self.font_overrides:
-                title_size = self.font_overrides[song_id].get('title', title_size)
-                lyric_size = self.font_overrides[song_id].get('lyric', lyric_size)
+            if song:
+                # Lấy cỡ chữ từ override (nếu có)
+                override = self._get_or_create_override(song.id)
+                title_size = override.get('title', title_size)
+                lyric_size = override.get('lyric', lyric_size)
+                
+                # Lấy danh sách slide (từ override hoặc chia lại)
+                lyric_slides = self._get_slides_for_preview(song, self.current_theme, lyric_size)
         
-        # Lệnh gọi này không thay đổi, nhưng hàm update_preview bên trong View đã mạnh mẽ hơn
+        # Lệnh gọi này đã được CẬP NHẬT
         self.view.preview_view.update_preview(
             theme=self.current_theme, 
             song=song, 
             title_size=title_size, 
-            lyric_size=lyric_size
+            lyric_size=lyric_size,
+            lyric_slides=lyric_slides # << THAM SỐ MỚI
         )

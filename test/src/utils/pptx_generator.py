@@ -13,46 +13,63 @@ from.text_formatter import PREFIXES_TO_HIGHLIGHT
 
 def generate_presentation(songs: list, theme: Theme, output_path: str, overrides: dict):
     """
-    Tạo một tệp PowerPoint với bố cục chuyên nghiệp hơn.
+    Tạo một tệp PowerPoint.
+    'overrides' giờ đây có thể chứa 'slides': list[str]
     """
     prs = Presentation()
     prs.slide_width = theme.slide_width
-    prs.slide_height = theme.slide_height # 6858000
-    blank_slide_layout = prs.slide_layouts[6] # Layout 6 thường là "Blank"
+    prs.slide_height = theme.slide_height
+    blank_slide_layout = prs.slide_layouts[6] 
 
-    # Xác định kích thước slide bằng Inches để định vị textbox
     is_widescreen = theme.slide_width > 10000000
     slide_width_inches = Inches(13.333) if is_widescreen else Inches(10)
     slide_height_inches = Inches(7.5)
 
     for i, song in enumerate(songs):
-        # --- 1. Lấy tất cả các đoạn lời bài hát đã được chia ---
-        lyric_size = overrides.get(song.id, {}).get('lyric', theme.lyric_font_size)
-        lyric_font = QFont(theme.lyric_font_name, lyric_size)
         
-        # Bounding box cho engine chia slide (chỉ dùng cho phần lời)
-        slide_w_px, slide_h_px = (960, 540) if is_widescreen else (720, 540)
-        # Box cho slide đầu tiên (sau khi trừ đi title)
-        box_h_first = (slide_height_inches.emu - Inches(1).emu) / 914400.0 * 96
-        # Box cho các slide sau (toàn màn hình)
-        box_h_full = slide_height_inches.emu / 914400.0 * 96
+        # Lấy override cho bài hát này
+        song_override = overrides.get(song.id, {})
         
-        # Chia lời bài hát thành 2 phần: phần cho slide đầu và phần còn lại
-        first_slide_lyric_chunk = "" # Sửa: Khởi tạo là chuỗi rỗng
-        remaining_lyrics = song.lyrics
+        lyric_size = song_override.get('lyric', theme.lyric_font_size)
+        title_size = song_override.get('title', theme.title_font_size)
         
-        # Tạm thời chia slide đầu tiên
-        temp_bounding_box = QRectF(0, 0, slide_w_px * 0.9, box_h_first * 0.9)
-        temp_slides = split_lyrics_into_slides(song.lyrics, lyric_font, temp_bounding_box)
-        if temp_slides:
-            first_slide_lyric_chunk = temp_slides[0] # Sửa: Chỉ lấy slide đầu tiên
-            # Lấy phần lời còn lại
-            # Sửa: Tính toán phần lời còn lại dựa trên độ dài của chuỗi đã lấy
-            remaining_lyrics = song.lyrics[len(first_slide_lyric_chunk):].lstrip()
+        lyrics_slides_for_export = []
+        
+        # --- LOGIC MỚI ĐỂ LẤY SLIDES ---
+        if 'slides' in song_override:
+            # ƯU TIÊN 1: Lấy các slide đã được người dùng chỉnh sửa
+            lyrics_slides_for_export = song_override['slides']
+            
+            # (Chúng ta giả định slide đầu tiên vẫn là tựa đề,
+            # và 'slides' chỉ chứa phần lời)
+            # Chúng ta cần tách slide lời đầu tiên ra
+            first_slide_lyric_chunk = lyrics_slides_for_export[0] if lyrics_slides_for_export else ""
+            lyrics_slides_remaining = lyrics_slides_for_export[1:]
+            
+        else:
+            # ƯU TIÊN 2: Dùng logic chia slide cũ (fallback)
+            lyric_font = QFont(theme.lyric_font_name, lyric_size)
+            slide_w_px, slide_h_px = (960, 540) if is_widescreen else (720, 540)
+            
+            # Box cho slide đầu (sau tựa đề)
+            box_h_first = (slide_height_inches.emu - Inches(1).emu) / 914400.0 * 96
+            temp_bounding_box = QRectF(0, 0, slide_w_px * 0.9, box_h_first * 0.9)
+            temp_slides = split_lyrics_into_slides(song.lyrics, lyric_font, temp_bounding_box)
+            
+            first_slide_lyric_chunk = ""
+            remaining_lyrics = song.lyrics
+            
+            if temp_slides:
+                first_slide_lyric_chunk = temp_slides[0]
+                remaining_lyrics = song.lyrics[len(first_slide_lyric_chunk):].lstrip()
 
-        # Chia phần lời còn lại cho các slide sau
-        full_bounding_box = QRectF(0, 0, slide_w_px * 0.9, box_h_full * 0.9)
-        lyrics_slides_remaining = split_lyrics_into_slides(remaining_lyrics, lyric_font, full_bounding_box)
+            # Box cho các slide sau
+            box_h_full = slide_height_inches.emu / 914400.0 * 96
+            full_bounding_box = QRectF(0, 0, slide_w_px * 0.9, box_h_full * 0.9)
+            lyrics_slides_remaining = split_lyrics_into_slides(remaining_lyrics, lyric_font, full_bounding_box)
+            
+        # --- HẾT LOGIC MỚI ---
+
 
         # --- 2. Tạo Slide Tựa đề (có lời) ---
         slide = prs.slides.add_slide(blank_slide_layout)
@@ -62,11 +79,11 @@ def generate_presentation(songs: list, theme: Theme, output_path: str, overrides
         fill.fore_color.rgb = RGBColor.from_string(theme.bg_color[1:])
 
         # --- 2a. Thêm Textbox cho Tựa đề ---
-        title_size = overrides.get(song.id, {}).get('title', theme.title_font_size)
+        # (title_size đã được lấy từ override ở trên)
         txBox_title = slide.shapes.add_textbox(Inches(0), Inches(0), slide_width_inches, Inches(1))
         tf_title = txBox_title.text_frame
-        p_title = tf_title.paragraphs[0] # Sửa: Lấy đoạn văn đầu tiên
-        p_title.text = song.title
+        p_title = tf_title.paragraphs[0]
+        p_title.text = song.title # (Cũng có thể lấy từ override nếu bạn lưu cả tựa đề)
         p_title.alignment = PP_ALIGN.CENTER
         font_title = p_title.font
         font_title.name = theme.title_font_name
@@ -81,13 +98,12 @@ def generate_presentation(songs: list, theme: Theme, output_path: str, overrides
             txBox_content = slide.shapes.add_textbox(Inches(0), Inches(1), slide_width_inches, slide_height_inches - Inches(1))
             tf_content = txBox_content.text_frame
             tf_content.word_wrap = True
-            p_content = tf_content.paragraphs[0] # Sửa: Lấy đoạn văn đầu tiên
-            # Áp dụng logic tô màu và định dạng
+            p_content = tf_content.paragraphs[0]
             _apply_lyric_formatting(p_content, first_slide_lyric_chunk, theme, lyric_size)
 
         # --- 3. Tạo các slide lời bài hát tiếp theo ---
         for slide_text in lyrics_slides_remaining:
-            if not slide_text.strip(): continue # Bỏ qua các slide trống
+            if not slide_text.strip(): continue
             
             slide = prs.slides.add_slide(blank_slide_layout)
             background = slide.background
@@ -95,12 +111,10 @@ def generate_presentation(songs: list, theme: Theme, output_path: str, overrides
             fill.solid()
             fill.fore_color.rgb = RGBColor.from_string(theme.bg_color[1:])
 
-            # Tạo một textbox duy nhất chiếm toàn bộ slide
             txBox_full = slide.shapes.add_textbox(Inches(0), Inches(0), slide_width_inches, slide_height_inches)
             tf_full = txBox_full.text_frame
             tf_full.word_wrap = True
-            p_full = tf_full.paragraphs[0] # Sửa: Lấy đoạn văn đầu tiên
-            # Áp dụng logic tô màu và định dạng
+            p_full = tf_full.paragraphs[0]
             _apply_lyric_formatting(p_full, slide_text, theme, lyric_size)
 
         # --- 4. Slide chuyển tiếp ---
@@ -113,6 +127,7 @@ def generate_presentation(songs: list, theme: Theme, output_path: str, overrides
 
     prs.save(output_path)
 
+# ... (Hàm _apply_lyric_formatting giữ nguyên)
 def _apply_lyric_formatting(p: 'Paragraph', text: str, theme: Theme, lyric_size: int):
     """Hàm trợ giúp để áp dụng định dạng cho một đoạn văn bản lời bài hát."""
     # Đặt các thuộc tính chung cho cả đoạn văn
